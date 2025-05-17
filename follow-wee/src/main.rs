@@ -1,12 +1,8 @@
-use bevy::{
-    input::common_conditions::input_just_released, log::tracing::Instrument, prelude::*,
-    ui::RelativeCursorPosition,
-};
+use bevy::{input::common_conditions::input_just_released, prelude::*};
 
 const MIN_DISTANCE: f32 = 10.0;
 
-// Define a struct to keep some information about our entity.
-// Here it's an arbitrary movement speed, the spawn location, and a maximum distance from it.
+// Target is a moveable with movement speed, the spawn location, and a maximum distance from it.
 #[derive(Component, Debug)]
 struct Movable {
     spawn: Vec3,
@@ -25,21 +21,26 @@ impl Movable {
     }
 }
 
+// The follower needs to know target as an Entity and the projectile speed.
 #[derive(Component)]
 struct Follower {
-    spawn: Vec3,
     speed: f32,
     target: Entity,
 }
 impl Follower {
-    fn new(spawn: Vec3, target: Entity) -> Self {
+    fn new(target: Entity) -> Self {
         Follower {
-            spawn,
             speed: 110.0,
             target,
         }
     }
 }
+
+// 2d Mesh handler for the target
+// #[derive(Resource)]
+// struct TargetResource {
+
+// }
 
 fn main() {
     App::new()
@@ -50,7 +51,11 @@ fn main() {
             Update,
             spawn_projectile.run_if(input_just_released(MouseButton::Left)),
         )
-        .add_systems(Update, move_projectile)
+        // projectile is added to Update, if there is any entigy with the Movable component type. This would be the target
+        .add_systems(
+            Update,
+            move_projectile.run_if(any_with_component::<Movable>),
+        )
         .run();
 }
 
@@ -77,8 +82,7 @@ fn spawn_projectile(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
-    mut targets: Single<(Entity, &mut Movable)>,
-    // relative_cursor_position: Single<&RelativeCursorPosition>,
+    targets: Single<(Entity, &mut Movable)>,
     camera_query: Single<(&Camera, &GlobalTransform)>,
     window: Query<&Window>,
 ) {
@@ -96,18 +100,20 @@ fn spawn_projectile(
         return;
     };
 
+    let projectitel_mesh_handle = meshes.add(Triangle2d::new(
+        Vec2::Y * 5.0,
+        Vec2::new(-5.0, -5.0),
+        Vec2::new(5.0, -5.0),
+    ));
+
     let entity_spawn = Vec3::new(world_pos.x, world_pos.y, 0.0);
 
     let target_entity = targets.0;
     commands.spawn((
-        Mesh2d(meshes.add(Triangle2d::new(
-            Vec2::Y * 5.0,
-            Vec2::new(-5.0, -5.0),
-            Vec2::new(5.0, -5.0),
-        ))),
+        Mesh2d(projectitel_mesh_handle),
         MeshMaterial2d(materials.add(Color::from(bevy::color::palettes::basic::RED))),
         Transform::from_translation(entity_spawn),
-        Follower::new(entity_spawn, target_entity),
+        Follower::new(target_entity),
     ));
 }
 
@@ -127,7 +133,7 @@ fn move_target(mut targets: Query<(&mut Transform, &mut Movable)>, timer: Res<Ti
 
 fn move_projectile(
     mut projectiles: Query<(Entity, &mut Transform, &mut Follower)>,
-    targets: Query<(&Transform), Without<Follower>>,
+    targets: Query<&Transform, Without<Follower>>,
     mut commands: Commands,
     timer: Res<Time>,
 ) {
