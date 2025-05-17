@@ -3,7 +3,7 @@ use bevy::{
     ui::RelativeCursorPosition,
 };
 
-const MIN_DISTANCE: f32 = 1.0;
+const MIN_DISTANCE: f32 = 10.0;
 
 // Define a struct to keep some information about our entity.
 // Here it's an arbitrary movement speed, the spawn location, and a maximum distance from it.
@@ -20,7 +20,7 @@ impl Movable {
         Movable {
             spawn,
             max_distance: 300.0,
-            speed: 60.0,
+            speed: 70.0,
         }
     }
 }
@@ -118,36 +118,31 @@ fn move_target(mut targets: Query<(&mut Transform, &mut Movable)>, timer: Res<Ti
         if (target.spawn - transform.translation).length() > target.max_distance {
             target.speed *= -1.0;
         }
-        let direction = transform.local_x();
+        let direction = Dir3::X;
         transform.translation += direction * target.speed * timer.delta_secs();
 
-        // transform.rotate_z(target.speed * timer.delta_secs());
-        // transform.rotation += Quat::from_rotation_arc(Vec3::Y, target.speed * timer.delta_secs());
+        transform.rotate_z(-1.2 * target.speed.signum() * timer.delta_secs());
     }
 }
 
 fn move_projectile(
-    mut projectiles: Query<(&mut Transform, &mut Follower)>,
-    mut targets: Query<(&Transform), Without<Follower>>,
+    mut projectiles: Query<(Entity, &mut Transform, &mut Follower)>,
+    targets: Query<(&Transform), Without<Follower>>,
     mut commands: Commands,
     timer: Res<Time>,
 ) {
-    for (mut transform, mut projectile) in &mut projectiles {
-        // projectile.targ
+    for (entity, mut transform, projectile) in &mut projectiles {
         let target_transform = targets.get(projectile.target).unwrap();
 
         let direction = target_transform.translation - transform.translation;
 
-        // despawn if direction is smaller ...
         if direction.length() < MIN_DISTANCE {
-            // commands.entity(projectile).despawn();
+            commands.entity(entity).despawn();
         }
 
         transform.translation += direction.normalize() * projectile.speed * timer.delta_secs();
-        // move closer to target
-        // trasnform.translation
 
-        // rotate to target
+        // rotate to point to target
         let rotate_to_target =
             Quat::from_rotation_arc(Vec3::Y, direction.xy().normalize().extend(0.));
         transform.rotation = rotate_to_target;
