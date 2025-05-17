@@ -1,4 +1,4 @@
-use bevy::{input::common_conditions::input_just_released, prelude::*};
+use bevy::{input::common_conditions::input_just_pressed, prelude::*};
 
 const MIN_DISTANCE: f32 = 10.0;
 
@@ -36,11 +36,13 @@ impl Follower {
     }
 }
 
-// 2d Mesh handler for the target
-// #[derive(Resource)]
-// struct TargetResource {
-
-// }
+// Resource for 2d Mesh handler and material mostly for projectile
+#[derive(Resource)]
+struct WorldAssets {
+    mesh: Handle<Mesh>,
+    material: Handle<ColorMaterial>,
+    // material: MeshMaterial2d<Handle<ColorMaterial>>,
+}
 
 fn main() {
     App::new()
@@ -49,7 +51,7 @@ fn main() {
         .add_systems(Update, move_target)
         .add_systems(
             Update,
-            spawn_projectile.run_if(input_just_released(MouseButton::Left)),
+            spawn_projectile.run_if(input_just_pressed(MouseButton::Left)),
         )
         // projectile is added to Update, if there is any entigy with the Movable component type. This would be the target
         .add_systems(
@@ -65,6 +67,18 @@ fn setup(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
 ) {
+    // create mesh handle and material for projectile
+    let projectile_asset = WorldAssets {
+        mesh: meshes.add(Triangle2d::new(
+            Vec2::Y * 5.0,
+            Vec2::new(-5.0, -5.0),
+            Vec2::new(5.0, -5.0),
+        )),
+        material: materials.add(Color::from(bevy::color::palettes::basic::RED)),
+    };
+
+    commands.insert_resource(projectile_asset);
+
     // Add a shape to visualize translation.
     let entity_spawn = Vec3::ZERO;
     commands.spawn((
@@ -80,41 +94,35 @@ fn setup(
 
 fn spawn_projectile(
     mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<ColorMaterial>>,
+    world_assets: Res<WorldAssets>,
     targets: Single<(Entity, &mut Movable)>,
     camera_query: Single<(&Camera, &GlobalTransform)>,
+
     window: Query<&Window>,
-) {
+) -> Result<(), BevyError> {
     let (camera, camera_transform) = *camera_query;
-    let Ok(window) = window.single() else {
-        return;
-    };
+    let window = window.single()?;
 
     let Some(cursor_position) = window.cursor_position() else {
-        return;
+        return Ok(());
     };
 
     // Calculate a world position based on the cursor's position.
     let Ok(world_pos) = camera.viewport_to_world_2d(camera_transform, cursor_position) else {
-        return;
+        return Ok(());
     };
-
-    let projectitel_mesh_handle = meshes.add(Triangle2d::new(
-        Vec2::Y * 5.0,
-        Vec2::new(-5.0, -5.0),
-        Vec2::new(5.0, -5.0),
-    ));
 
     let entity_spawn = Vec3::new(world_pos.x, world_pos.y, 0.0);
 
     let target_entity = targets.0;
     commands.spawn((
-        Mesh2d(projectitel_mesh_handle),
-        MeshMaterial2d(materials.add(Color::from(bevy::color::palettes::basic::RED))),
+        Mesh2d(world_assets.mesh.clone()),
+        MeshMaterial2d(world_assets.material.clone()),
         Transform::from_translation(entity_spawn),
         Follower::new(target_entity),
     ));
+
+    Ok(())
 }
 
 // This system will move all Movable entities with a Transform
